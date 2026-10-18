@@ -1,0 +1,19 @@
+base_url: http://demo-app:8000
+endpoints:
+  - method: GET
+    path: /auth/verify
+    expect: {status: 200, max_latency_ms: 1000}
+  - method: GET
+    path: /login
+    expect: {status: 200, max_latency_ms: 1000}
+  - method: GET
+    path: /cart/42
+    expect: {status: 200, max_latency_ms: 1000}
+  - method: POST
+    path: /checkout
+    body: {cart_id: "42"}
+    expect: {status: 200, max_latency_ms: 1000}
+  - method: POST
+    path: /payments/charge
+    body: {amount: 10}
+    expect: {status: 200, max_latency_ms: 1000}
