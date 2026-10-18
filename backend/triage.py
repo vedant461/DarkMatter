@@ -44,7 +44,7 @@ def get_blast_radius(root: str) -> list[dict[str, Any]]:
 
 def rank_criticality() -> list[dict[str, Any]]:
     rows = store.query("MATCH (e:Endpoint) OPTIONAL MATCH (e)-[:DEPENDS_ON]->(d:Endpoint) RETURN e.id AS id, count(d) AS dependents, e.category AS category")
-    maximum = max((int(row["dependents"]) for row in rows), default=1)
+    maximum = max(max((int(row["dependents"]) for row in rows), default=0), 1)
     for row in rows:
         category = str(row.get("category") or "read-only").lower()
         boost = 1.5 if category in {"auth", "payment", "checkout"} else 1.0 if category == "read-only" else 0.5

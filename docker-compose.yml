@@ -2,6 +2,11 @@ services:
   falkordb:
     image: falkordb/falkordb:latest
     ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
   demo-app:
     build:
       context: .
@@ -14,7 +19,11 @@ services:
     env_file: .env
     volumes: [".:/workspace"]
     ports: ["8000:8000"]
-    depends_on: [falkordb, demo-app]
+    depends_on:
+      falkordb:
+        condition: service_healthy
+      demo-app:
+        condition: service_started
   frontend:
     build:
       context: ./frontend
