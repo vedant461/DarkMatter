@@ -9,6 +9,8 @@ from .config import settings
 from .extract import extract_fastapi
 from .graph import store
 from .ingest import ingest_repo
+from .monitor import probe_once
+from .triage import deterministic_triage, send_alert
 
 app = FastAPI(title="DarkMatter")
 
@@ -16,6 +18,10 @@ app = FastAPI(title="DarkMatter")
 class IngestRequest(BaseModel):
     repo: str
     max_commits: int = 300
+
+
+class SimulationRequest(BaseModel):
+    path: str
 
 
 @app.on_event("startup")
@@ -47,3 +53,43 @@ def endpoints() -> list[dict[str, object]]:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "graph": settings.falkordb_graph}
+
+
+@app.get("/incidents")
+def incidents() -> list[dict[str, object]]:
+    return store.query("MATCH (i:Incident) RETURN i ORDER BY i.opened_at DESC")
+
+
+@app.get("/incidents/{incident_id}")
+def incident(incident_id: str) -> dict[str, object]:
+    found = store.query("MATCH (i:Incident {id:$id}) RETURN i", {"id": incident_id})
+    if not found:
+        raise HTTPException(404, "incident not found")
+    return {"incident": found[0], "triage": deterministic_triage(incident_id)}
+
+
+@app.post("/incidents/{incident_id}/send-email")
+def incident_email(incident_id: str, payload: dict[str, object]) -> dict[str, object]:
+    return send_alert(incident_id, [str(x) for x in payload.get("recipients", [])],
+                      str(payload.get("subject", "DarkMatter incident")), str(payload.get("body", "")))
+
+
+@app.post("/simulate-failure")
+async def simulate_failure(request: SimulationRequest) -> dict[str, object]:
+    import httpx
+    async with httpx.AsyncClient() as client:
+        response = await client.post(settings.demo_base_url + "/_chaos", json={"path": request.path, "mode": "error"})
+    return {"simulated": "failure", "path": request.path, "status": response.status_code}
+
+
+@app.post("/simulate-recover")
+async def simulate_recover(request: SimulationRequest) -> dict[str, object]:
+    import httpx
+    async with httpx.AsyncClient() as client:
+        response = await client.post(settings.demo_base_url + "/_chaos", json={"path": request.path, "mode": "ok"})
+    return {"simulated": "recover", "path": request.path, "status": response.status_code}
+
+
+@app.post("/monitor")
+async def monitor() -> list[dict[str, object]]:
+    return await probe_once()
